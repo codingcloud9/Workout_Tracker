@@ -106,11 +106,12 @@
       }
 
       // 테이블 그리기
+      // (상단 API_URL 등 기존 변수들은 유지)
+
       function renderTable() {
         const container = document.getElementById("app");
         const rangeDisplay = document.getElementById("currentDateRange");
 
-        // 현재 주의 날짜 리스트 생성 (월~일)
         const weekDates = [];
         for (let i = 0; i < 7; i++) {
           let d = new Date(currentMonday);
@@ -118,40 +119,37 @@
           weekDates.push(formatDate(d));
         }
 
-        // 날짜 표시 업데이트
         rangeDisplay.innerText = `${weekDates[0]} ~ ${weekDates[6]}`;
 
         let html = `<table><thead><tr><th>날짜</th>`;
-
-        // 사람 이름 헤더 생성 (첫번째 컬럼 Date 제외)
         for (let i = 1; i < headers.length; i++) {
           html += `<th>${headers[i]}</th>`;
         }
         html += `</tr></thead><tbody>`;
 
-        // 주간 날짜별 행 생성
         weekDates.forEach((dateStr) => {
           const todayStr = formatDate(new Date());
           const isToday = dateStr === todayStr ? 'class="is-today"' : "";
-
-          // 해당 날짜의 데이터 찾기
           const rowData = allData.find((r) => r[0] === dateStr);
 
-          html += `<tr ${isToday}><td>${dateStr} ${getDayName(dateStr)}</td>`;
+          html += `<tr ${isToday}><td>${dateStr} (${getDayName(dateStr)})</td>`;
 
-          // 각 사람별 데이터 칸
           for (let i = 1; i < headers.length; i++) {
             const person = headers[i];
-            // 데이터가 없으면 0으로 처리
-            const val = rowData ? (rowData[i] === "" ? 0 : rowData[i]) : "-";
+            // 시트의 값이 true, "TRUE", 1 일 경우 체크된 상태로 표시
+            const isChecked =
+              rowData &&
+              (rowData[i] === true ||
+                rowData[i] === "TRUE" ||
+                rowData[i] === 1);
 
-            // 오늘이거나 과거인 경우에만 수정 가능하게 할지, 미래는 막을지 선택 (여기선 다 열어둠)
-            // 데이터가 있으면 input, 없으면(날짜 생성 전) 텍스트 표시
             if (rowData) {
               html += `<td>
-                            <input type="number" min="0" value="${val}" 
-                             onchange="updateData('${dateStr}', '${person}', this.value)">
-                        </td>`;
+                        <input type="checkbox" 
+                               ${isChecked ? "checked" : ""} 
+                               style="width:25px; height:25px; cursor:pointer;"
+                               onchange="updateData('${dateStr}', '${person}', this.checked)">
+                    </td>`;
             } else {
               html += `<td>-</td>`;
             }
@@ -163,21 +161,27 @@
         container.innerHTML = html;
       }
 
-      // 데이터 업데이트 (서버로 전송)
-      function updateData(date, person, value) {
-        // UI 반응성을 위해 로컬 데이터 먼저 수정 (옵션)
-        // 실제 전송
+      function updateData(date, person, isChecked) {
+        // 즉시 반영을 위해 로컬 데이터 상태 업데이트
+        const row = allData.find((r) => r[0] === date);
+        if (row) {
+          const colIdx = headers.indexOf(person);
+          row[colIdx] = isChecked;
+        }
+
         fetch(API_URL, {
           method: "POST",
-          mode: "no-cors", // 구글 스크립트는 no-cors로 보내야 함
+          mode: "no-cors",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: date, person: person, value: value }),
+          body: JSON.stringify({
+            date: date,
+            person: person,
+            value: isChecked, // true 또는 false 전송
+          }),
         }).then(() => {
-          console.log("Updated!");
-          // 필요하다면 여기서 다시 fetchData()를 호출해 동기화할 수 있음
+          console.log(`${person}의 ${date} 운동 상태: ${isChecked}`);
         });
       }
-
       // 주 이동 함수
       function moveWeek(direction) {
         currentMonday.setDate(currentMonday.getDate() + direction * 7);
