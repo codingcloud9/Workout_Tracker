@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>팀 운동 트래커</title>
+    <style>
+      body {
+        font-family: "Noto Sans KR", sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
+      }
+      .header-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+      button:disabled {
+        background-color: #ccc;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 12px;
+        text-align: center;
+      }
+      th {
+        background-color: #f4f4f4;
+      }
+      /* 오늘 날짜 하이라이트 */
+      .is-today {
+        background-color: #e8f5e9;
+        font-weight: bold;
+      }
+      /* 운동 횟수 입력 인풋 */
+      input[type="number"] {
+        width: 50px;
+        text-align: center;
+        border: 1px solid #ccc;
+        padding: 5px;
+      }
+      .loading {
+        color: #888;
+        margin: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>💪 주간 운동 현황</h1>
+
+    <div class="header-controls">
+      <button id="prevBtn" onclick="moveWeek(-1)">❮ 지난주</button>
+      <h2 id="currentDateRange">날짜 로딩중...</h2>
+      <button id="nextBtn" onclick="moveWeek(1)">다음주 ❯</button>
+    </div>
+
+    <div id="app">
+      <div class="loading">데이터를 불러오는 중입니다...</div>
+    </div>
+
+    <script>
+      // ★ 중요: 여기에 배포한 Apps Script URL을 넣으세요.
+      const API_URL =
+        "https://script.google.com/macros/s/AKfycbx9ajuVufkkBebHrK5CaYACqaRgr7tdVcHeo6lzii6F6QH_XI5gUYlsDJ5bRwKdh-kZ/exec";
+
+      let allData = []; // 전체 데이터 저장
+      let headers = []; // 사람 이름 헤더
+      let currentMonday = getMonday(new Date()); // 현재 보고 있는 주의 월요일
+
+      // 초기 로드
+      window.onload = function () {
+        fetchData();
+      };
+
+      // 데이터 가져오기
+      async function fetchData() {
+        try {
+          const response = await fetch(API_URL);
+          const json = await response.json();
+
+          headers = json.headers; // ["Date", "철수", "영희"...]
+          allData = json.data; // [["2023-10-27", 1, 0]...]
+
+          renderTable();
+        } catch (error) {
+          document.getElementById("app").innerHTML =
+            `<p style="color:red">에러 발생: ${error.message}</p>`;
+        }
+      }
+
+      // 테이블 그리기
+      function renderTable() {
+        const container = document.getElementById("app");
+        const rangeDisplay = document.getElementById("currentDateRange");
+
+        // 현재 주의 날짜 리스트 생성 (월~일)
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+          let d = new Date(currentMonday);
+          d.setDate(d.getDate() + i);
+          weekDates.push(formatDate(d));
+        }
+
+        // 날짜 표시 업데이트
+        rangeDisplay.innerText = `${weekDates[0]} ~ ${weekDates[6]}`;
+
+        let html = `<table><thead><tr><th>날짜</th>`;
+
+        // 사람 이름 헤더 생성 (첫번째 컬럼 Date 제외)
+        for (let i = 1; i < headers.length; i++) {
+          html += `<th>${headers[i]}</th>`;
+        }
+        html += `</tr></thead><tbody>`;
+
+        // 주간 날짜별 행 생성
+        weekDates.forEach((dateStr) => {
+          const todayStr = formatDate(new Date());
+          const isToday = dateStr === todayStr ? 'class="is-today"' : "";
+
+          // 해당 날짜의 데이터 찾기
+          const rowData = allData.find((r) => r[0] === dateStr);
+
+          html += `<tr ${isToday}><td>${dateStr} ${getDayName(dateStr)}</td>`;
+
+          // 각 사람별 데이터 칸
+          for (let i = 1; i < headers.length; i++) {
+            const person = headers[i];
+            // 데이터가 없으면 0으로 처리
+            const val = rowData ? (rowData[i] === "" ? 0 : rowData[i]) : "-";
+
+            // 오늘이거나 과거인 경우에만 수정 가능하게 할지, 미래는 막을지 선택 (여기선 다 열어둠)
+            // 데이터가 있으면 input, 없으면(날짜 생성 전) 텍스트 표시
+            if (rowData) {
+              html += `<td>
+                            <input type="number" min="0" value="${val}" 
+                             onchange="updateData('${dateStr}', '${person}', this.value)">
+                        </td>`;
+            } else {
+              html += `<td>-</td>`;
+            }
+          }
+          html += `</tr>`;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+      }
+
+      // 데이터 업데이트 (서버로 전송)
+      function updateData(date, person, value) {
+        // UI 반응성을 위해 로컬 데이터 먼저 수정 (옵션)
+        // 실제 전송
+        fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors", // 구글 스크립트는 no-cors로 보내야 함
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: date, person: person, value: value }),
+        }).then(() => {
+          console.log("Updated!");
+          // 필요하다면 여기서 다시 fetchData()를 호출해 동기화할 수 있음
+        });
+      }
+
+      // 주 이동 함수
+      function moveWeek(direction) {
+        currentMonday.setDate(currentMonday.getDate() + direction * 7);
+        renderTable();
+      }
+
+      // 유틸: 특정 날짜의 월요일 구하기
+      function getMonday(d) {
+        d = new Date(d);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
+        return new Date(d.setDate(diff));
+      }
+
+      // 유틸: YYYY-MM-DD 변환
+      function formatDate(d) {
+        let month = "" + (d.getMonth() + 1);
+        let day = "" + d.getDate();
+        const year = d.getFullYear();
+        if (month.length < 2) month = "0" + month;
+        if (day.length < 2) day = "0" + day;
+        return [year, month, day].join("-");
+      }
+
+      // 유틸: 요일 구하기
+      function getDayName(dateStr) {
+        const days = ["일", "월", "화", "수", "목", "금", "토"];
+        return days[new Date(dateStr).getDay()];
+      }
+    </script>
+  </body>
+</html>
