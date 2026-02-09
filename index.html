@@ -140,19 +140,15 @@
             const isChecked =
               rowData &&
               (rowData[i] === true ||
-                rowData[i] === "TRUE" ||
+                rowData[i] === "true" ||
                 rowData[i] === 1);
-
-            if (rowData) {
-              html += `<td>
+            console.log(person, rowData[i], todayStr);
+            html += `<td>
                         <input type="checkbox" 
                                ${isChecked ? "checked" : ""} 
                                style="width:25px; height:25px; cursor:pointer;"
                                onchange="updateData('${dateStr}', '${person}', this.checked)">
                     </td>`;
-            } else {
-              html += `<td>-</td>`;
-            }
           }
           html += `</tr>`;
         });
@@ -168,6 +164,7 @@
           const colIdx = headers.indexOf(person);
           row[colIdx] = isChecked;
         }
+        console.log("updateData", date, person, isChecked);
 
         fetch(API_URL, {
           method: "POST",
@@ -178,7 +175,8 @@
             person: person,
             value: isChecked, // true 또는 false 전송
           }),
-        }).then(() => {
+        }).then((response) => {
+          console.log(response);
           console.log(`${person}의 ${date} 운동 상태: ${isChecked}`);
         });
       }
